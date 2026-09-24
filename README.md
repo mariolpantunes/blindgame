@@ -147,9 +147,12 @@ customDomains = ["tunnel.hrun.mooo.com"]
 requestHeaders.set.x-forwarded-proto = "https"
 ```
 
+The token stays out of `frpc.toml`: put `FRP_AUTH_TOKEN=...` in a `.env` file (git-ignored)
+and load it into a subshell that runs the client, so it never reaches your shell history:
+
 ```bash
 venv/bin/python -m blindgame --config contest.yaml          # terminal 1
-FRP_AUTH_TOKEN=... frpc -c frpc.toml                        # terminal 2
+(set -a; . ./.env; frpc -c frpc.toml)                       # terminal 2
 ```
 
 Students open `https://tunnel.hrun.mooo.com` once `frpc` logs `start proxy success`.
