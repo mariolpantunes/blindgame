@@ -4,7 +4,9 @@ The contest file is the teacher's only control: edit it and restart the server.
 """
 
 import argparse
+import os
 import sys
+import tempfile
 from concurrent.futures import as_completed
 
 import uvicorn
@@ -14,6 +16,10 @@ from .game import Game
 from .server import create_app
 from .store import Conflict, Store
 
+# In the system's temporary folder (tmpfs on most Linux systems): a reboot clears the
+# database, its -wal and -shm files, and every stored solution, ready for the next class.
+DEFAULT_DB = os.path.join(tempfile.gettempdir(), "blindgame.db")
+
 
 def main() -> None:
     """Parse the command line, load the contest file and serve the game."""
@@ -21,7 +27,11 @@ def main() -> None:
         prog="blindgame", description="Feel like a black-box optimizer."
     )
     parser.add_argument("--config", default="contest.yaml", help="contest file (YAML)")
-    parser.add_argument("--db", default="blindgame.db", help="SQLite file with players and queries")
+    parser.add_argument(
+        "--db",
+        default=DEFAULT_DB,
+        help=f"SQLite file with players, queries and solutions (default: {DEFAULT_DB})",
+    )
     parser.add_argument(
         "--reset", action="store_true", help="wipe this contest's players and results first"
     )

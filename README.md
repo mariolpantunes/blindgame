@@ -129,8 +129,9 @@ venv/bin/python -m blindgame --config contest.yaml --host 0.0.0.0 --port 8000
 The server first computes and stores every solution (a few seconds per function), then
 serves. Students open `http://<laptop-ip>:8000`; the projector shows
 `http://<laptop-ip>:8000/board`. Students who drop and come back resume where they were.
-Restarting the server starts a new game, so everyone joins again. Results live in
-`blindgame.db` (`--db` to change).
+Restarting the server starts a new game, so everyone joins again. The database lives in the
+system's temporary folder (`blindgame.db` in Python's `tempfile.gettempdir()`, usually a tmpfs
+`/tmp`), so a reboot clears it for the next class; `--db` sets another file.
 
 ### Behind a closed firewall
 

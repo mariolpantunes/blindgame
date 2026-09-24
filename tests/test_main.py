@@ -39,6 +39,9 @@ class MainTest(unittest.TestCase):
             )
         run.assert_called_once()
 
+    def test_database_defaults_to_the_temporary_folder(self):
+        self.assertEqual(os.path.dirname(cli.DEFAULT_DB), tempfile.gettempdir())
+
     def test_bad_config_exits_with_a_message(self):
         with tempfile.TemporaryDirectory() as tmp:
             bad = os.path.join(tmp, "bad.yaml")
