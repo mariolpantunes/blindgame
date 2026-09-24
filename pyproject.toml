@@ -16,13 +16,15 @@ dependencies = [
     "fastapi>=0.141",
     "uvicorn[standard]>=0.53",
     "pyyaml>=6.0.3",
+    # HTTP client of the load tester (python -m blindgame.loadtest).
+    "httpx2>=2.13.1",
 ]
 
 [project.scripts]
 blindgame = "blindgame.__main__:main"
 
 [dependency-groups]
-test = ["httpx2>=2.13.1", "coverage>=7.16"]
+test = ["coverage>=7.16"]
 
 [tool.setuptools]
 packages = ["blindgame"]

@@ -133,6 +133,17 @@ Restarting the server starts a new game, so everyone joins again. The database l
 system's temporary folder (`blindgame.db` in Python's `tempfile.gettempdir()`, usually a tmpfs
 `/tmp`), so a reboot clears it for the next class; `--db` sets another file.
 
+### Load test
+
+Before a class, simulated students can play the running server end to end (they join the
+current game, so restart the server afterwards):
+
+```bash
+venv/bin/python -m blindgame.loadtest http://127.0.0.1:8000 --students 30
+```
+
+It reports errors, latency percentiles per request type and the bytes received.
+
 ### Behind a closed firewall
 
 When the network isolates clients (e.g. eduroam), publish the laptop through the frp tunnel
@@ -146,6 +157,7 @@ auth.method = "token"
 auth.token = "{{ .Envs.FRP_AUTH_TOKEN }}"
 transport.protocol = "wss"
 transport.tls.enable = false
+transport.poolCount = 10
 
 [[proxies]]
 name = "blindgame"

@@ -106,8 +106,6 @@ function enter() {
   $("practice-chip").textContent = `practice #${me.attempt - 1}`;
   $("practice-chip").classList.toggle("hidden", me.counts);
   for (const id of ["player-chip", "leave"]) $(id).classList.remove("hidden");
-  // One board socket per page, however many attempts are played in it.
-  if (!state.watching) state.watching = watchBoard(onBoard);
   // Back from a reload: show the reveal of the last finished problem if it was not seen.
   const seen = Number(storage(`bg-seen-${me.attempt}`) ?? -1);
   if (me.finished) return showFinal();
@@ -334,6 +332,9 @@ $("next-btn").addEventListener("click", () => {
 // --- final -----------------------------------------------------------------------------
 
 async function showFinal() {
+  // The live board is only on this screen: during play it would only cost bandwidth.
+  // One socket per page, however many attempts are played in it.
+  if (!state.watching) state.watching = watchBoard(onBoard);
   state.mode = "final";
   show("final-view");
   $("final-title").textContent = state.me.counts ? "Your results" : `Your results (practice #${state.me.attempt - 1})`;

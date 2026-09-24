@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -84,6 +85,8 @@ def create_app(game: Game) -> FastAPI:
     """Build the FastAPI app around one game."""
     app = FastAPI(title="blindgame", version=__version__)
     versions = Versions()
+    # A reveal is ~200 KB of JSON (the colour map); gzip cuts it to ~40% on the tunnel.
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     @app.middleware("http")
     async def revalidate(request: Request, call_next):

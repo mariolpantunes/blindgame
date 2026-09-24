@@ -79,6 +79,15 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(r.json()["current"], 1)
         self.assertEqual(ana.get("/api/me/problems/0/reveal").status_code, 200)
 
+    def test_large_responses_are_compressed(self):
+        ana = self.join("ana")
+        self.spend(ana, 0)
+        r = ana.get("/api/me/problems/0/reveal", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(r.headers.get("content-encoding"), "gzip")
+        self.assertIn("field", r.json())  # decoded transparently
+        small = ana.get("/api/contest", headers={"Accept-Encoding": "gzip"})
+        self.assertNotIn("content-encoding", small.headers)
+
     def test_bad_queries(self):
         ana = self.join("ana")
         for body, code in (
