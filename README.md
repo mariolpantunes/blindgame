@@ -78,9 +78,17 @@ can be published at a time.
 python3.12 -m venv venv
 venv/bin/pip install -q --upgrade "pip>=25.1"
 venv/bin/pip install -q --upgrade . --group test
-PYTHONPATH=. venv/bin/python -m unittest discover -s tests
-ruff check blindgame tests && ruff format --check blindgame tests && basedpyright && vulture
+pre-commit install          # run the CI gate on every commit
+pre-commit run --all-files
 ```
+
+The pre-commit hooks and `.github/workflows/ci.yml` run the same checks: ruff (lint,
+docstrings and format), basedpyright, vulture, `node --check` on `blindgame/static/js`,
+unittest, and coverage (at least 95%). Hooks use the tools installed on the machine
+(`pipx install ruff basedpyright vulture pre-commit`); CI pins the same versions
+(ruff 0.16.6, basedpyright 1.39.10, vulture 2.16, Python 3.12, Node 24), so a tool upgrade
+changes the pin in `ci.yml` in the same commit. The venv holds only runtime and test
+dependencies.
 
 ### Layout
 
@@ -96,6 +104,7 @@ blindgame/
 ├── __main__.py   # CLI: --config, --db, --reset
 └── static/       # play (index) and board pages; vanilla ES modules, Nord theme
 contest.example.yaml  # the teacher's file, documented
+.github/workflows/ci.yml + .pre-commit-config.yaml   # the same gate, remote and local
 deploy/           # frp tunnel: nginx site for hrun, frpc config for the laptop
 tests/
 ```
