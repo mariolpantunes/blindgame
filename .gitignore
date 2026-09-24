@@ -246,3 +246,5 @@ GEMINI.md
 .continue/
 .aider*
 .github/copilot-instructions.md
+# The laptop's frp tunnel client config (points at the teacher's own server).
+frpc.toml
