@@ -12,23 +12,26 @@ The game makes the black-box setting tangible before it is formalised:
 
 - **Sparse information:** a handful of evaluations in a dark box, each answering with one
   number. Where do you look first, and when do you stop exploring?
-- **Humans against machines:** after each problem, pyBlindOpt optimizers run with the
-  student's exact budget on the same instance, so students see what random search, local
-  search and population methods would have done in their place.
+- **Humans against machines:** after each problem, pyBlindOpt optimizers solve the same
+  instance, starting from an OBLESA population as large as the student's budget and running
+  100 epochs, so students see where random search, local search and population methods get
+  with a hundred times more evaluations.
 - **Landscapes:** the reveal shows the function they were blind to: funnels, valleys,
   deceptive basins, regular grids of local minima.
 
 ## Rules
 
 - **The box:** each problem is a hidden function on [0, 1]²; the goal is the lowest value.
-- **The budget:** D²+1 evaluations per problem (5 in 2D). Every query costs one, repeats
-  included, and there is no undo.
+- **The budget:** 5D evaluations per problem (the rule 4D+D: 10 in 2D). Every query costs
+  one, repeats included, and there is no undo. You may stop a problem early (after at least
+  one evaluation) with **Stop here**.
 - **What you see:** your own points and their values, nothing else: no function name, no
   landscape, no optimum. Probes are coloured by their rank among your own values (gold =
   best), never by the value itself.
-- **Order:** problems are played P1…Pn. A problem ends when its budget is spent, and its
-  reveal follows: the true colour map, your points, one run of each optimizer with the same
-  budget, the optimum, and the share of each optimizer's runs you beat.
+- **Order:** problems are played P1…Pn. A problem ends when its budget is spent or you stop,
+  and its reveal follows: the true colour map, your points, each optimizer's initial
+  population, best-so-far trail and final best, the optimum, the optimizer's median gap
+  (lower is better) and the share of its runs you beat.
 - **Scoring:** per problem, players are ranked by their distance to the optimum in the
   function's own units; ties go to whoever reached their best in fewer evaluations. The
   score is the sum of ranks (lower is better); unplayed problems rank last.
@@ -46,7 +49,7 @@ The game makes the black-box setting tangible before it is formalised:
  │         space.js     │            │    │                                               │
  │ /board  board.js     │ <── WS ─── │ game.py     attempts, order, evaluation, reveal   │
  └──────────────────────┘            │    ├── problems.py  hidden instances (pyBlindOpt) │
-                                     │    ├── reveal.py    colour map + capped runs      │
+                                     │    ├── reveal.py    colour map + reference runs   │
                                      │    ├── store.py     SQLite: players, attempts,    │
                                      │    │                query log                     │
                                      │    └── config.py    contest.yaml → ContestConfig  │
@@ -60,15 +63,18 @@ The game makes the black-box setting tangible before it is formalised:
   optimum location and Q a random orthogonal map (a signed permutation for Schwefel and
   Lunacek, whose boundary walls must stay axis-aligned). The reported value is
   a·(f(z) − f(o)) + b, with a hidden scale a and offset b, so f* is unknown to the player.
-  Every attempt draws its own p, Q, a and b from its seed, so a revealed answer is useless
-  to anyone else. Ranking undoes a and b: gap = (best − b) / a.
-- **Budgets and order are atomic.** The store checks the budget, and that the previous
-  problem is finished, inside one SQLite transaction, so concurrent requests cannot
-  overspend or skip ahead.
-- **Capped optimizers.** For the reveal, each pyBlindOpt optimizer runs on the player's own
-  instance through a wrapper that records the first B evaluations and answers the rest
-  with a huge value: exactly what the optimizer would learn with the player's budget,
-  whatever its population size. Results are cached per instance.
+  Everyone's first attempt plays the same p, Q, a and b, drawn from the run's seed; practice
+  attempts draw their own. Ranking undoes a and b: gap = (best − b) / a.
+- **A fresh game per start.** Unless the contest file pins a `seed`, the server seeds each
+  start from the clock: the function order is reshuffled and every instance is new. Each
+  start is its own contest in the database (`<id>-<seed>`).
+- **Budgets, stops and order are atomic.** The store checks the budget, early stops and that
+  the previous problem is finished inside one SQLite transaction, so concurrent requests
+  cannot overspend or skip ahead.
+- **Solutions computed up front.** Before serving, the server runs every optimizer on every
+  shared instance (OBLESA start of B points, 100 epochs, several seeds) and stores the
+  results in SQLite, so every reveal is instant. Practice attempts compute theirs in the
+  background as soon as a problem starts.
 - **Live board.** A WebSocket pushes the standings after every evaluation; the board is
   built once per change, whatever the number of open screens.
 - **Frontend.** Vanilla ES modules, no build step: a canvas view of the box (starfield,
@@ -78,9 +84,9 @@ The game makes the black-box setting tangible before it is formalised:
 | Module | Role |
 | :-- | :-- |
 | `problems.py` | the 11 pyBlindOpt landscapes, their optima, the seeded instance transform |
-| `contest.py` | contest definition, budget rules (2D+1, D²+1, 2^D+1, or a number), ranking |
+| `contest.py` | contest definition, budget formula in D (default 4D+D), ranking |
 | `config.py` | the teacher's YAML file (strict: an unknown key is an error) |
-| `reveal.py` | colour map and pyBlindOpt runs capped at the player's budget |
+| `reveal.py` | colour map and pyBlindOpt reference runs (OBLESA start, fixed epochs) |
 | `game.py` | the game as a service: joins, attempts, evaluation, reveal, board |
 | `store.py` | SQLite persistence; player tokens stored as SHA-256 only |
 | `server.py` | HTTP API (player identified by an HttpOnly cookie), WebSocket, static files |
@@ -88,11 +94,12 @@ The game makes the black-box setting tangible before it is formalised:
 
 | Method | Path | Purpose |
 | :-- | :-- | :-- |
-| `GET` | `/api/contest` | public facts: title, budget, number of problems, whether a code is needed |
+| `GET` | `/api/contest` | public facts: budget, number of problems, whether a code is needed |
 | `POST` | `/api/join` | `{nickname, code}` → player cookie |
 | `GET` | `/api/me` | the current attempt: progress and the player's own queries |
 | `POST` | `/api/me/problems/{k}/eval` | `{x: [x1, x2]}` → f(x), remaining budget |
-| `GET` | `/api/me/problems/{k}/reveal` | after problem k's budget: the landscape, optimum and optimizers |
+| `POST` | `/api/me/problems/{k}/stop` | end problem k early (after at least one evaluation) |
+| `GET` | `/api/me/problems/{k}/reveal` | once problem k is over: the landscape, optimum and optimizers |
 | `POST` | `/api/me/restart` | a practice attempt, once the current one is finished |
 | `GET` / `WS` | `/api/board`, `/ws/board` | the leaderboard (live over the WebSocket) |
 
@@ -108,8 +115,10 @@ venv/bin/pip install .
 ## Running a class
 
 The teacher's only control is a contest file: copy `contest.example.yaml` to
-`contest.yaml` and set the title, seed, functions (a count or a list), budget rule, an
-optional join code, `status: open|closed`, and the optimizers shown in the reveal.
+`contest.yaml` and set the functions (a count or a list, played in a shuffled
+order), the budget formula in D (default `4D+D`), an optional join code,
+`status: open|closed`, and the reveal (optimizers, runs, epochs). Leave `seed` out for a
+fresh game at every start; set it to replay one.
 
 Serve it on the local network, so students on the same network can reach the laptop:
 
@@ -117,11 +126,10 @@ Serve it on the local network, so students on the same network can reach the lap
 venv/bin/python -m blindgame --config contest.yaml --host 0.0.0.0 --port 8000
 ```
 
-Students open `http://<laptop-ip>:8000`; the projector shows `http://<laptop-ip>:8000/board`.
-
-Changing the game itself (seed, functions, dimension, budget) under the same `id` is
-refused unless the server starts with `--reset`, which wipes that contest's results; title,
-code, status and the reveal can change at any time (restart the server). Results live in
+The server first computes and stores every solution (a few seconds per function), then
+serves. Students open `http://<laptop-ip>:8000`; the projector shows
+`http://<laptop-ip>:8000/board`. Students who drop and come back resume where they were.
+Restarting the server starts a new game, so everyone joins again. Results live in
 `blindgame.db` (`--db` to change).
 
 ### Behind a closed firewall

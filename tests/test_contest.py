@@ -11,17 +11,24 @@ from blindgame.contest import (
 
 
 class SpecTest(unittest.TestCase):
-    def test_budget_rules(self):
-        for rule in ("2D+1", "D^2+1", "2^D+1"):
-            self.assertEqual(budget_for(rule, 2), 5)
-        self.assertEqual(budget_for("D^2+1", 10), 101)
-        self.assertEqual(budget_for("2^D+1", 10), 1025)
-        self.assertEqual(budget_for("12", 3), 12)
-        for bad in ("0", "D^3", "", "-1"):
+    def test_budget_formulas(self):
+        for rule, d, expected in (
+            ("4D+D", 2, 10),
+            ("4D+D", 10, 50),
+            ("3D+D", 2, 8),
+            ("3*D + D", 2, 8),
+            ("D^2+1", 10, 101),
+            ("2^D+1", 10, 1025),
+            ("(D+1)^2", 2, 9),
+            ("12", 3, 12),
+        ):
+            with self.subTest(rule=rule, d=d):
+                self.assertEqual(budget_for(rule, d), expected)
+        for bad in ("0", "", "-1", "x", "D**", "1e3", "D^100", "__import__('os')", "2/D"):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 budget_for(bad, 2)
-        self.assertEqual(ContestSpec(1, ("Sphere",)).budget, 5)
-        self.assertEqual(ContestSpec(1, ("Sphere",), dim=3).budget, 10)
+        self.assertEqual(ContestSpec(1, ("Sphere",)).budget, 10)  # default 4D+D
+        self.assertEqual(ContestSpec(1, ("Sphere",), dim=3).budget, 15)
 
     def test_random_contest(self):
         spec = ContestSpec.random(42)

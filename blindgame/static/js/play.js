@@ -19,6 +19,7 @@ const state = {
   selection: null,
   busy: false,
   repeatOk: false,
+  stopArmed: false,
   closed: false,
   watching: null,
 };
@@ -61,7 +62,6 @@ function storage(key, value) {
 async function start() {
   state.contest = await api("GET", "/api/contest");
   state.closed = state.contest.status !== "open";
-  document.title = `blindgame · ${state.contest.title}`;
   try {
     state.me = await api("GET", "/api/me");
   } catch (e) {
@@ -74,7 +74,6 @@ async function start() {
 
 function showJoin() {
   show("join-view");
-  $("join-title").textContent = state.contest.title;
   $("join-intro").textContent =
     `Somewhere in a dark box hides a minimum. ${state.contest.problems} problems, ` +
     `${state.contest.budget} evaluations each; every evaluation tells you a single number. Lowest value wins.`;
@@ -103,11 +102,10 @@ $("leave").addEventListener("click", async () => {
 
 function enter() {
   const { me, contest } = state;
-  $("contest-chip").textContent = contest.title;
   $("player-chip").textContent = me.player;
   $("practice-chip").textContent = `practice #${me.attempt - 1}`;
   $("practice-chip").classList.toggle("hidden", me.counts);
-  for (const id of ["contest-chip", "player-chip", "leave"]) $(id).classList.remove("hidden");
+  for (const id of ["player-chip", "leave"]) $(id).classList.remove("hidden");
   // One board socket per page, however many attempts are played in it.
   if (!state.watching) state.watching = watchBoard(onBoard);
   // Back from a reload: show the reveal of the last finished problem if it was not seen.
@@ -135,6 +133,7 @@ function showPlay(k) {
 function aim(x) {
   state.selection = x;
   state.repeatOk = false;
+  state.stopArmed = false;
   view.select(state.mode === "play" ? x : null);
   $("x1").value = x ? x[0].toFixed(6) : "";
   $("x2").value = x ? x[1].toFixed(6) : "";
@@ -156,6 +155,9 @@ for (const id of ["x1", "x2"]) {
 function updateButton() {
   const locked = state.closed || state.mode !== "play" || queries().length >= budget();
   $("eval-btn").disabled = state.busy || locked || !state.selection;
+  // Stopping needs at least one evaluation; the first press only arms it.
+  $("stop-btn").disabled = state.busy || locked || queries().length === 0;
+  $("stop-btn").textContent = state.stopArmed ? "Press again to stop" : "Stop here and reveal";
   view.readOnly = locked;
   for (const id of ["x1", "x2"]) $(id).disabled = locked;
 }
@@ -177,15 +179,43 @@ $("eval-form").addEventListener("submit", async (e) => {
     queries(k).push({ seq: q.seq, x: q.x, f: q.f });
     aim(null);
     if (q.remaining === 0) {
-      state.me.current = k + 1;
-      state.me.finished = k + 1 >= n();
-      if (!state.me.finished) state.me.problems.push({ index: k + 1, queries: [] });
       state.busy = false;
-      return showReveal(k);
+      return finishProblem(k);
     }
   } catch (err) {
     $("eval-error").textContent = err.message;
     if (err instanceof ApiError && err.status === 423) state.closed = true;
+  } finally {
+    state.busy = false;
+    if (state.mode === "play") render();
+  }
+});
+
+// The current problem is over (budget spent or stopped): move on to its reveal.
+function finishProblem(k) {
+  state.me.current = k + 1;
+  state.me.finished = k + 1 >= n();
+  if (!state.me.finished) state.me.problems.push({ index: k + 1, queries: [] });
+  state.stopArmed = false;
+  return showReveal(k);
+}
+
+$("stop-btn").addEventListener("click", async () => {
+  if (!state.stopArmed) {
+    state.stopArmed = true;
+    updateButton();
+    return;
+  }
+  const k = state.problem;
+  state.busy = true;
+  updateButton();
+  try {
+    await api("POST", `/api/me/problems/${k}/stop`);
+    state.busy = false;
+    return finishProblem(k);
+  } catch (err) {
+    $("eval-error").textContent = err.message;
+    state.stopArmed = false;
   } finally {
     state.busy = false;
     if (state.mode === "play") render();
@@ -252,7 +282,9 @@ async function showReveal(k) {
   storage(`bg-seen-${state.me.attempt}`, k);
 
   const paths = r.machines.map((m, i) => ({
-    points: m.path.map((p) => p.x),
+    start: m.start,
+    trail: m.trail,
+    best: m.best,
     color: PATH_COLORS[i % PATH_COLORS.length],
     on: true,
   }));
@@ -270,6 +302,7 @@ async function showReveal(k) {
   $("rv-best").textContent = fmt(r.you.best);
   $("rv-gap").textContent = fmt(r.you.gap);
   $("rv-runs").textContent = String(state.contest.runs ?? "");
+  $("rv-epochs").textContent = String(state.contest.epochs ?? "");
   $("rv-machines").replaceChildren(
     ...r.machines.map((m, i) =>
       el(
@@ -283,6 +316,7 @@ async function showReveal(k) {
           },
         },
         el("td", {}, el("span", { class: "swatch", style: `background: ${PATH_COLORS[i % PATH_COLORS.length]}` }), m.name),
+        el("td", { class: "mono" }, m.evaluations),
         el("td", { class: "mono" }, fmt(m.median_gap)),
         el("td", { class: "mono" }, `${Math.round(m.you_beat)}%`),
       ),

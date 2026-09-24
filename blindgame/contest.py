@@ -8,7 +8,10 @@ reached their best in fewer evaluations); the score is the sum of ranks (lower
 is better).
 """
 
+import ast
 import math
+import operator
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -17,22 +20,45 @@ from . import problems
 DEFAULT_PROBLEMS = 8
 DEFAULT_DIM = 2
 
-# Evaluations per problem as a function of the dimension. All give 5 in 2D.
-BUDGET_RULES = {
-    "2D+1": lambda d: 2 * d + 1,
-    "D^2+1": lambda d: d * d + 1,
-    "2^D+1": lambda d: 2**d + 1,
-}
-DEFAULT_BUDGET_RULE = "D^2+1"
+# Evaluations per problem: a formula in the dimension D, e.g. "4D+D" (= 5D, 10 in 2D),
+# "3D+D", "D^2+1", "2^D+1", or a plain number. Implicit products ("4D") are allowed.
+DEFAULT_BUDGET_RULE = "4D+D"
+BUDGET_MAX = 100_000
+_BUDGET_CHARS = re.compile(r"^[0-9D+\-*^()]+$")
+_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Pow: operator.pow}
+
+
+def _evaluate(node: ast.AST, dim: int) -> int:
+    if isinstance(node, ast.Expression):
+        return _evaluate(node.body, dim)
+    if isinstance(node, ast.Constant) and type(node.value) is int:
+        return node.value
+    if isinstance(node, ast.Name) and node.id == "D":
+        return dim
+    if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+        left, right = _evaluate(node.left, dim), _evaluate(node.right, dim)
+        if isinstance(node.op, ast.Pow) and right > 64:
+            raise ValueError("exponent too large")
+        return _OPS[type(node.op)](left, right)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        return -_evaluate(node.operand, dim)
+    raise ValueError("unsupported budget expression")
 
 
 def budget_for(rule: str, dim: int) -> int:
-    """A rule name from BUDGET_RULES, or a positive integer as text."""
-    if rule in BUDGET_RULES:
-        return BUDGET_RULES[rule](dim)
-    if rule.isdigit() and int(rule) > 0:
-        return int(rule)
-    raise ValueError(f"budget must be one of {list(BUDGET_RULES)} or a positive integer")
+    """Evaluate a budget formula in D (see DEFAULT_BUDGET_RULE) for dimension `dim`."""
+    text = rule.replace(" ", "")
+    if not text or not _BUDGET_CHARS.match(text):
+        raise ValueError(f"budget: a formula in D such as '4D+D' or a number, got '{rule}'")
+    # "4D" -> "4*D", "D(" / ")(" -> "D*(", ")*("; "^" is a power.
+    text = re.sub(r"(?<=[0-9D)])(?=[D(])", "*", text).replace("^", "**")
+    try:
+        value = _evaluate(ast.parse(text, mode="eval"), dim)
+    except (SyntaxError, ValueError) as e:
+        raise ValueError(f"budget: cannot read '{rule}' ({e})") from e
+    if not 1 <= value <= BUDGET_MAX:
+        raise ValueError(f"budget '{rule}' gives {value} evaluations; allowed 1..{BUDGET_MAX}")
+    return value
 
 
 @dataclass(frozen=True)

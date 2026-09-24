@@ -44,7 +44,7 @@ export class SpaceView {
     this.probes = [];
     this.selection = null;
     this.field = null; // reveal: an image of the landscape over the box
-    this.paths = []; // reveal: [{points: [[x, y]...], color}]
+    this.paths = []; // reveal: [{start: [[x, y]...], trail: [[x, y]...], best: [x, y], color}]
     this.optimum = null; // reveal: [x, y]
     this.readOnly = false;
     this.view = { cx: 0.5, cy: 0.5, scale: 1 };
@@ -266,27 +266,47 @@ export class SpaceView {
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0, y1 - y0);
     ctx.setLineDash([]);
 
-    // Optimizer paths: a thin line through their evaluations, in order.
+    // Optimizers: initial population (hollow circles), best-so-far trail (line with
+    // a dark casing, so it reads on any colour of the map) and final best (diamond).
     for (const path of this.paths) {
       ctx.strokeStyle = path.color;
-      ctx.fillStyle = path.color;
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      path.points.forEach(([x, y], k) => {
-        const [px, py] = this.toScreen(x, y);
-        if (k === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-      for (const [x, y] of path.points) {
+      for (const [x, y] of path.start) {
         const [px, py] = this.toScreen(x, y);
         ctx.beginPath();
-        ctx.rect(px - 3.5, py - 3.5, 7, 7);
-        ctx.fill();
-        ctx.strokeStyle = "#2e3440";
-        ctx.lineWidth = 1;
+        ctx.arc(px, py, 3.5, 0, 2 * Math.PI);
         ctx.stroke();
       }
+      const trail = path.trail.map(([x, y]) => this.toScreen(x, y));
+      for (const [width, color] of [
+        [5, "rgba(46, 52, 64, 0.85)"],
+        [2.5, path.color],
+      ]) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        trail.forEach(([px, py], k) => (k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+        ctx.stroke();
+      }
+      ctx.fillStyle = path.color;
+      for (const [px, py] of trail) {
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      const [bx, by] = this.toScreen(path.best[0], path.best[1]);
+      ctx.beginPath();
+      ctx.moveTo(bx, by - 9);
+      ctx.lineTo(bx + 7, by);
+      ctx.lineTo(bx, by + 9);
+      ctx.lineTo(bx - 7, by);
+      ctx.closePath();
+      ctx.fillStyle = path.color;
+      ctx.fill();
+      ctx.strokeStyle = "#eceff4";
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     // Probes, worst first so the best is on top.

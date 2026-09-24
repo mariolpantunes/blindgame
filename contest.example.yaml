@@ -1,28 +1,28 @@
 # blindgame contest file. Copy to contest.yaml, edit, and start the server:
 #   venv/bin/python -m blindgame --config contest.yaml
 #
-# Changing seed, dim, problems or budget changes the game itself: use a new `id`
-# (a new contest, old results kept) or start with --reset (wipes this id's results).
-# title, code, status and reveal can change at any time (restart the server).
+# Every start is a new game: without a pinned `seed` the order of the functions and
+# every hidden instance change. Students who drop resume; after a restart they rejoin.
+# All solutions are computed and stored before the server accepts students.
 
-id: faa-2026-class-02         # database key: letters, digits, . _ -
-title: FAA · Class 02         # shown to students and on the board
-seed: 2026                    # picks the landscapes (when `problems` is a count)
+id: blindgame                 # database key (+ the run's seed): letters, digits, . _ -
+# seed: 2026                 # optional: pin to replay a run; default = a fresh game (clock) at every start
 
 dim: 2                        # v0.1.0 plays in 2D (the reveal's colour map needs 2D)
-problems: 8                   # a count (seeded random pick), or an ordered list, e.g.
+problems: 8                   # a count (seeded random pick) or a list; played in a shuffled order, e.g.
 #   [Sphere, Rastrigin, Ackley, Rosenbrock, Griewank, Styblinski-Tang,
 #    Levy, Zakharov, Dixon-Price, Schwefel, Lunacek]
-budget: D^2+1                 # evaluations per problem: 2D+1 | D^2+1 | 2^D+1 | an integer (all 5 in 2D)
+budget: 4D+D                  # evaluations per problem, a formula in D: 4D+D (= 10 in 2D), 3D+D, D^2+1, 2^D+1, or a number
 
 code: ""                      # optional join code; empty = anyone with the link can join
 status: open                  # open | closed (closed: no more evaluations, board stays)
 
-reveal:                       # shown after each problem, next to the student's points
-  algorithms:                 # pyBlindOpt optimizers run with the student's budget
+reveal:                       # shown after each problem: pyBlindOpt as the reference solution
+  algorithms:                 # pyBlindOpt optimizers to run on the student's instance
     - Random Search
     - Hill Climbing
     - Particle Swarm
     - Differential Evolution
     - Grey Wolf
-  runs: 25                    # seeds per optimizer, for "you beat N% of runs"
+  runs: 10                    # seeds per optimizer, for "you beat N% of runs"
+  epochs: 100                 # epochs per run; each starts from an OBLESA population of `budget` points

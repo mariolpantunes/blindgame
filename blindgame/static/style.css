@@ -223,6 +223,7 @@ body.app > main.page { overflow-y: auto; max-width: none; width: 100%; }
 #final-view table { font-size: 18px; }
 #final-view th { font-size: 15px; }
 #rv-machines tr { cursor: pointer; }
+.legend .sym { color: var(--nord6); font-weight: 700; }
 #rv-machines tr.off td { opacity: 0.35; }
 body.app > main.page > section { max-width: 1100px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 

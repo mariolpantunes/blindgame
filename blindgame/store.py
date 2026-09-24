@@ -38,6 +38,18 @@ CREATE TABLE IF NOT EXISTS attempts (
     created   REAL NOT NULL,
     UNIQUE (player_id, number)
 );
+CREATE TABLE IF NOT EXISTS stops (
+    attempt_id INTEGER NOT NULL REFERENCES attempts(id),
+    problem    INTEGER NOT NULL,
+    created    REAL NOT NULL,
+    PRIMARY KEY (attempt_id, problem)
+);
+CREATE TABLE IF NOT EXISTS reveals (
+    key        TEXT PRIMARY KEY,
+    contest_id TEXT NOT NULL,
+    data       TEXT NOT NULL,
+    created    REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS queries (
     id         INTEGER PRIMARY KEY,
     attempt_id INTEGER NOT NULL REFERENCES attempts(id),
@@ -165,8 +177,10 @@ class Store:
                     self._db.execute(
                         f"DELETE FROM queries WHERE attempt_id IN ({attempts})", (cid,)
                     )
+                    self._db.execute(f"DELETE FROM stops WHERE attempt_id IN ({attempts})", (cid,))
                     self._db.execute(f"DELETE FROM attempts WHERE player_id IN ({players})", (cid,))
                     self._db.execute("DELETE FROM players WHERE contest_id = ?", (cid,))
+                    self._db.execute("DELETE FROM reveals WHERE contest_id = ?", (cid,))
                 self._db.execute(
                     "INSERT INTO contests VALUES (?, ?, ?) "
                     "ON CONFLICT(id) DO UPDATE SET spec = excluded.spec",
@@ -252,20 +266,35 @@ class Store:
 
     # --- queries ----------------------------------------------------------------
 
+    def _done(self, attempt_id: int, problem: int, budget: int) -> bool:
+        """Budget spent or stopped early (call inside a transaction)."""
+        used = self._db.execute(
+            "SELECT COUNT(*) FROM queries WHERE attempt_id = ? AND problem = ?",
+            (attempt_id, problem),
+        ).fetchone()[0]
+        stopped = self._db.execute(
+            "SELECT 1 FROM stops WHERE attempt_id = ? AND problem = ?", (attempt_id, problem)
+        ).fetchone()
+        return used >= budget or stopped is not None
+
+    def _open(self, attempt: Attempt, problem: int, budget: int) -> int:
+        """Checks the problem can be played now; returns evaluations spent on it."""
+        if problem > 0 and not self._done(attempt.id, problem - 1, budget):
+            raise OutOfOrder(f"finish problem {problem} first")
+        if self._done(attempt.id, problem, budget):
+            raise BudgetExhausted("this problem is finished")
+        return self._db.execute(
+            "SELECT COUNT(*) FROM queries WHERE attempt_id = ? AND problem = ?",
+            (attempt.id, problem),
+        ).fetchone()[0]
+
     def record(self, attempt: Attempt, problem: int, x, f: float, budget: int) -> Query:
-        """Appends one evaluation if budget remains and the previous problem is done."""
+        """Appends one evaluation if the problem is open and the previous one is done."""
         x = tuple(float(v) for v in x)
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
-                count = "SELECT COUNT(*) FROM queries WHERE attempt_id = ? AND problem = ?"
-                if problem > 0:
-                    before = self._db.execute(count, (attempt.id, problem - 1)).fetchone()[0]
-                    if before < budget:
-                        raise OutOfOrder(f"finish problem {problem} first")
-                used = self._db.execute(count, (attempt.id, problem)).fetchone()[0]
-                if used >= budget:
-                    raise BudgetExhausted(f"budget of {budget} evaluations spent")
+                used = self._open(attempt, problem, budget)
                 self._db.execute(
                     "INSERT INTO queries (attempt_id, problem, seq, x, f, created) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
@@ -276,6 +305,32 @@ class Store:
                 self._db.execute("ROLLBACK")
                 raise
         return Query(problem, used + 1, x, float(f))
+
+    def stop(self, attempt: Attempt, problem: int, budget: int) -> None:
+        """Ends a problem before its budget is spent (at least one evaluation needed)."""
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                if self._open(attempt, problem, budget) == 0:
+                    raise OutOfOrder("evaluate at least one point before stopping")
+                self._db.execute(
+                    "INSERT INTO stops VALUES (?, ?, ?)", (attempt.id, problem, time.time())
+                )
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+
+    def stopped(self, attempt_ids: list[int]) -> set[tuple[int, int]]:
+        """(attempt id, problem) pairs ended early."""
+        if not attempt_ids:
+            return set()
+        marks = ",".join("?" * len(attempt_ids))
+        rows = self._fetch(
+            f"SELECT attempt_id, problem FROM stops WHERE attempt_id IN ({marks})",
+            tuple(attempt_ids),
+        )
+        return {(a, p) for a, p in rows}
 
     def history(self, attempt: Attempt, problem: int | None = None) -> list[Query]:
         """The attempt's queries (optionally one problem), in order."""
@@ -301,3 +356,18 @@ class Store:
             tuple(attempt_ids),
         )
         return [Best(*r) for r in rows]
+
+    # --- reveals ----------------------------------------------------------------
+
+    def reveal(self, key: str) -> dict | None:
+        """A stored reveal (colour map and optimizer runs), or None."""
+        rows = self._fetch("SELECT data FROM reveals WHERE key = ?", (key,))
+        return json.loads(rows[0][0]) if rows else None
+
+    def save_reveal(self, key: str, cid: str, data: dict) -> None:
+        """Store a computed reveal; the same key always holds the same data."""
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO reveals VALUES (?, ?, ?, ?)",
+                (key, cid, json.dumps(data), time.time()),
+            )

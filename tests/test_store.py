@@ -65,6 +65,19 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(len(self.store.history(att, 0)), B)
         self.assertEqual(len(self.store.history(att)), B + 1)
 
+    def test_stop(self):
+        player, _ = self.store.join("c1", "ana")
+        att = self.store.attempt(player)
+        with self.assertRaises(OutOfOrder):
+            self.store.stop(att, 0, B)  # no evaluation yet
+        self.store.record(att, 0, [0.5, 0.5], 1.0, B)
+        self.store.stop(att, 0, B)
+        self.assertEqual(self.store.stopped([att.id]), {(att.id, 0)})
+        self.assertEqual(self.store.stopped([]), set())
+        with self.assertRaises(BudgetExhausted):
+            self.store.record(att, 0, [0.5, 0.5], 1.0, B)
+        self.store.record(att, 1, [0.5, 0.5], 1.0, B)  # the next problem is open
+
     def test_budget_under_concurrency(self):
         player, _ = self.store.join("c1", "ana")
         att = self.store.attempt(player)

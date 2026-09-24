@@ -12,9 +12,9 @@ from blindgame.store import Store
 CFG = parse(
     {
         "id": "api",
-        "title": "Aula",
         "problems": ["Sphere", "Levy", "Ackley"],
-        "reveal": {"algorithms": ["Random Search"], "runs": 2},
+        "budget": 5,
+        "reveal": {"algorithms": ["Random Search"], "runs": 2, "epochs": 2},
     }
 )
 
@@ -41,7 +41,7 @@ class ApiTest(unittest.TestCase):
 
     def test_public_contest_hides_landscapes(self):
         c = self.client.get("/api/contest").json()
-        self.assertEqual((c["title"], c["budget"], c["problems"]), ("Aula", 5, 3))
+        self.assertEqual((c["budget"], c["problems"]), (5, 3))
         self.assertNotIn("Sphere", str(c))
 
     def test_full_game(self):
@@ -61,7 +61,7 @@ class ApiTest(unittest.TestCase):
             ana.post("/api/me/problems/0/eval", json={"x": [0.5, 0.5]}).status_code, 409
         )
         reveal = ana.get("/api/me/problems/0/reveal").json()
-        self.assertEqual(reveal["landscape"], "Sphere")
+        self.assertEqual(reveal["landscape"], CFG.spec.landscapes[0])
         self.assertEqual(len(reveal["machines"]), 1)
 
         self.assertEqual(ana.post("/api/me/restart").status_code, 409)  # not finished
@@ -70,6 +70,14 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(ana.get("/api/me").json()["finished"])
         again = ana.post("/api/me/restart").json()
         self.assertEqual((again["attempt"], again["counts"], again["current"]), (2, False, 0))
+
+    def test_stop_endpoint(self):
+        ana = self.join("ana")
+        self.assertEqual(ana.post("/api/me/problems/0/stop").status_code, 409)
+        self.spend(ana, 0, n=1)
+        r = ana.post("/api/me/problems/0/stop")
+        self.assertEqual(r.json()["current"], 1)
+        self.assertEqual(ana.get("/api/me/problems/0/reveal").status_code, 200)
 
     def test_bad_queries(self):
         ana = self.join("ana")

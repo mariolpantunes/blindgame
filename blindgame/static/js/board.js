@@ -9,8 +9,6 @@ const $ = (id) => document.getElementById(id);
 
 function render(board) {
   const c = board.contest;
-  document.title = `blindgame · ${c.title}`;
-  $("title").textContent = c.title;
   $("status").textContent = c.status;
   $("status").className = `chip status-${c.status}`;
   $("join-url").textContent = location.host;

@@ -5,15 +5,19 @@ See contest.example.yaml.
 """
 
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 from . import contest, problems, reveal
 
-KEYS = {"id", "title", "seed", "dim", "problems", "budget", "code", "status", "reveal"}
-REVEAL_KEYS = {"algorithms", "runs"}
+KEYS = {"id", "seed", "dim", "problems", "budget", "code", "status", "reveal"}
+# Seeds stay below 2**31 so they are valid numpy seeds everywhere.
+SEED_LIMIT = 2**31
+REVEAL_KEYS = {"algorithms", "runs", "epochs"}
 ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
@@ -22,12 +26,17 @@ class ContestConfig:
     """A parsed contest file: the game (spec) plus runtime settings."""
 
     id: str
-    title: str
     spec: contest.ContestSpec
     code: str = ""
     status: str = "open"
     algorithms: tuple[str, ...] = reveal.DEFAULT_ALGORITHMS
     runs: int = reveal.DEFAULT_RUNS
+    epochs: int = reveal.DEFAULT_EPOCHS
+
+    @property
+    def key(self) -> str:
+        """The contest's key in the database: the file's id plus this run's seed."""
+        return f"{self.id}-{self.spec.seed}"
 
     @property
     def is_open(self) -> bool:
@@ -38,8 +47,7 @@ class ContestConfig:
         """What players may know: the size of the box, never the landscapes."""
         s = self.spec
         return {
-            "id": self.id,
-            "title": self.title,
+            "id": self.key,
             "status": self.status,
             "needs_code": bool(self.code),
             "dim": s.dim,
@@ -47,6 +55,7 @@ class ContestConfig:
             "bounds": [[0.0, 1.0]] * s.dim,
             "problems": s.n_problems,
             "runs": self.runs,
+            "epochs": self.epochs,
         }
 
 
@@ -60,7 +69,9 @@ def parse(data: object) -> ContestConfig:
     cid = str(data.get("id", ""))
     if not ID_PATTERN.match(cid):
         raise ValueError("id is required: letters, digits, '.', '_' or '-', up to 64 characters")
-    seed = int(data.get("seed", 0))
+    # No seed: a fresh game at every start (local clock). A pinned seed reproduces a run.
+    pinned = data.get("seed")
+    seed = int(time.time()) % SEED_LIMIT if pinned is None else int(pinned)
     dim = int(data.get("dim", contest.DEFAULT_DIM))
     budget = str(data.get("budget", contest.DEFAULT_BUDGET_RULE)).replace(" ", "")
     chosen = data.get("problems", contest.DEFAULT_PROBLEMS)
@@ -68,8 +79,10 @@ def parse(data: object) -> ContestConfig:
         if chosen < 1:
             raise ValueError("problems must be >= 1")
         spec = contest.ContestSpec.random(seed, chosen, dim, budget)
-    elif isinstance(chosen, list):
-        spec = contest.ContestSpec(seed, tuple(map(str, chosen)), dim, budget)
+    elif isinstance(chosen, list) and chosen:
+        # The listed functions are played in a seeded order: every start reshuffles them.
+        order = np.random.default_rng([seed]).permutation(len(chosen))
+        spec = contest.ContestSpec(seed, tuple(str(chosen[i]) for i in order), dim, budget)
     else:
         raise ValueError(f"problems: a count or a list of {sorted(problems.LANDSCAPES)}")
 
@@ -87,15 +100,18 @@ def parse(data: object) -> ContestConfig:
     runs = int(shown.get("runs", reveal.DEFAULT_RUNS))
     if not 1 <= runs <= 200:
         raise ValueError("reveal.runs must be in [1, 200]")
+    epochs = int(shown.get("epochs", reveal.DEFAULT_EPOCHS))
+    if not 1 <= epochs <= 1000:
+        raise ValueError("reveal.epochs must be in [1, 1000]")
 
     return ContestConfig(
         id=cid,
-        title=str(data.get("title", cid)),
         spec=spec,
         code=str(data.get("code", "") or "").strip().upper(),
         status=status,
         algorithms=algorithms,
         runs=runs,
+        epochs=epochs,
     )
 
 

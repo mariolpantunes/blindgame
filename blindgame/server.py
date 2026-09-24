@@ -150,6 +150,12 @@ def create_app(game: Game) -> FastAPI:
         versions.bump()
         return out
 
+    @app.post("/api/me/problems/{problem}/stop")
+    def stop(problem: int, p: Annotated[Player, Depends(player)]) -> dict:
+        game.stop(p, problem)
+        versions.bump()
+        return game.state(p)
+
     @app.get("/api/me/problems/{problem}/reveal")
     def get_reveal(problem: int, p: Annotated[Player, Depends(player)]) -> dict:
         return game.reveal(p, problem)

@@ -5,6 +5,7 @@ The contest file is the teacher's only control: edit it and restart the server.
 
 import argparse
 import sys
+from concurrent.futures import as_completed
 
 import uvicorn
 
@@ -34,9 +35,15 @@ def main() -> None:
     except (OSError, ValueError, Conflict) as e:
         sys.exit(f"blindgame: {e}")
     print(
-        f"blindgame: '{cfg.title}' ({cfg.id}), {cfg.spec.n_problems} problems, "
+        f"blindgame: {cfg.key}, {cfg.spec.n_problems} problems, "
         f"budget {cfg.spec.budget}, {cfg.status}"
     )
+    # Every solution is computed and stored before the first student arrives.
+    pending = game.precompute()
+    for done, future in enumerate(as_completed(pending), start=1):
+        future.result()
+        print(f"blindgame: reveals {done}/{len(pending)} computed", flush=True)
+    print(f"blindgame: all {cfg.spec.n_problems} reveals stored; serving", flush=True)
     # The frp tunnel connects from localhost: trust its X-Forwarded-Proto (https).
     uvicorn.run(
         create_app(game),

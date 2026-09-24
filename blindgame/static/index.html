@@ -10,7 +10,6 @@
 <body class="app">
     <header class="topbar">
         <div class="brand"><img src="/static/favicon.svg" alt=""><h1>blindgame</h1></div>
-        <span id="contest-chip" class="chip hidden"></span>
         <span id="practice-chip" class="chip practice hidden"></span>
         <span class="spacer"></span>
         <span id="player-chip" class="chip hidden"></span>
@@ -59,6 +58,7 @@
                     <label>x₂ <input id="x2" class="mono" type="number" min="0" max="1" step="any" required></label>
                     <button id="eval-btn" type="submit" style="grid-column: 1 / -1">Evaluate f(x)</button>
                 </form>
+                <button id="stop-btn" class="ghost" type="button">Stop here and reveal</button>
                 <div id="eval-error" class="error" role="alert"></div>
             </section>
             <section>
@@ -92,14 +92,26 @@
                 <div class="mono">gap to f* <span id="rv-gap"></span></div>
             </section>
             <section>
-                <h2>The machines, same budget</h2>
+                <h2>The machines</h2>
                 <table>
-                    <thead><tr><th>Optimizer</th><th>median gap</th><th>you beat</th></tr></thead>
+                    <thead><tr><th>Optimizer</th><th>evals</th><th>median gap ↓</th><th>you beat</th></tr></thead>
                     <tbody id="rv-machines"></tbody>
                 </table>
+                <p class="muted legend" style="margin: 0">
+                    <span class="sym">○</span> initial population &nbsp;
+                    <span class="sym">━</span> best so far &nbsp;
+                    <span class="sym">◆</span> final best &nbsp;
+                    <span class="sym">☆</span> optimum &nbsp;
+                    <span class="sym">●</span> your points
+                </p>
                 <p class="muted" style="margin: 0">
-                    Squares: one run of each optimizer (click a row to hide it). Star: the optimum. Gaps are in the
-                    function's own units; "you beat" is over <span id="rv-runs"></span> runs.
+                    Each optimizer starts from an OBLESA population as large as your budget and
+                    runs <span id="rv-epochs"></span> epochs, so it spends far more evaluations
+                    than you had. <strong>Gap</strong> = distance of the best value to the
+                    optimum, in the function's own units: <strong>lower is better</strong>, 0 is
+                    the optimum. <strong>You beat</strong> = share of its <span id="rv-runs"></span>
+                    runs whose best is farther from the optimum than yours. Click a row to hide
+                    its drawing.
                 </p>
             </section>
             <button id="next-btn" type="button">Next problem →</button>
@@ -111,7 +123,7 @@
             <h2 id="final-title">Your results</h2>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Problem</th><th>Function</th><th>your gap</th><th>best machine</th><th>you beat</th></tr></thead>
+                    <thead><tr><th>Problem</th><th>Function</th><th>your gap ↓</th><th>best machine (median gap ↓)</th><th>you beat</th></tr></thead>
                     <tbody id="final-rows"></tbody>
                 </table>
             </div>

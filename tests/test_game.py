@@ -1,6 +1,10 @@
 import unittest
 from dataclasses import replace
+from unittest import mock
 
+import numpy as np
+
+from blindgame import reveal
 from blindgame.config import parse
 from blindgame.game import Game, WrongCode
 from blindgame.store import BudgetExhausted, ContestClosed, NotFound, OutOfOrder, Store
@@ -10,7 +14,8 @@ CFG = parse(
         "id": "g1",
         "seed": 3,
         "problems": ["Sphere", "Rastrigin"],
-        "reveal": {"algorithms": ["Random Search", "Particle Swarm"], "runs": 3},
+        "budget": 5,
+        "reveal": {"algorithms": ["Random Search", "Particle Swarm"], "runs": 3, "epochs": 2},
     }
 )
 
@@ -42,10 +47,13 @@ class GameTest(unittest.TestCase):
             self.game.evaluate(ana, 0, [0.5, 0.5])
 
         r = self.game.reveal(ana, 0)
-        self.assertEqual(r["landscape"], "Sphere")
+        self.assertEqual(r["landscape"], CFG.spec.landscapes[0])
         self.assertEqual(len(r["you"]["points"]), 5)
         self.assertEqual([m["name"] for m in r["machines"]], ["Random Search", "Particle Swarm"])
-        self.assertEqual(len(r["machines"][0]["path"]), 5)
+        machine = r["machines"][1]
+        self.assertEqual(len(machine["start"]), 5)  # OBLESA population = the budget
+        self.assertEqual(machine["best"], machine["trail"][-1])
+        self.assertGreater(machine["evaluations"], 5)
         self.assertEqual(len(r["field"]["z"]), 128)
         self.assertTrue(0 <= r["machines"][1]["you_beat"] <= 100)
         self.assertEqual(self.game.state(ana)["current"], 1)
@@ -99,6 +107,63 @@ class GameTest(unittest.TestCase):
         with self.assertRaises(ContestClosed):
             game.join("rui", "XYZ")
         store.close()
+
+    def test_first_attempts_share_instances(self):
+        ana, _ = self.game.join("ana")
+        rui, _ = self.game.join("rui")
+        a, r = self.store.attempt(ana), self.store.attempt(rui)
+        self.assertNotEqual(a.seed, r.seed)
+        np.testing.assert_array_equal(
+            self.game.instance(a, 0).x_opt, self.game.instance(r, 0).x_opt
+        )
+        play(self.game, ana, 0)
+        play(self.game, ana, 1)
+        practice = self.game.restart(ana)
+        self.assertFalse(
+            np.allclose(self.game.instance(practice, 0).x_opt, self.game.instance(a, 0).x_opt)
+        )
+
+    def test_reveals_precomputed_and_stored(self):
+        pending = self.game.precompute()
+        self.assertEqual(len(pending), 2)
+        for f in pending:
+            f.result()
+        self.assertEqual(self.game.precompute(), [])  # all in memory now
+        # A new server on the same database reads them back instead of recomputing.
+        again = Game(self.store, CFG)
+        with mock.patch.object(reveal, "compare", side_effect=AssertionError("recomputed")):
+            self.assertEqual(again.precompute(), [])
+            ana, _ = again.join("ana")
+            play(again, ana, 0)
+            self.assertEqual(again.reveal(ana, 0)["landscape"], CFG.spec.landscapes[0])
+
+    def test_failed_reveal_is_retried(self):
+        ana, _ = self.game.join("ana")
+        # Patched before playing: the first evaluation already starts the computation.
+        with mock.patch.object(reveal, "compare", side_effect=RuntimeError("boom")):
+            play(self.game, ana, 0)
+            with self.assertRaises(RuntimeError):
+                self.game.reveal(ana, 0)
+        self.assertEqual(self.game.reveal(ana, 0)["landscape"], CFG.spec.landscapes[0])
+
+    def test_stop_early(self):
+        ana, _ = self.game.join("ana")
+        with self.assertRaises(OutOfOrder):
+            self.game.stop(ana, 0)  # nothing evaluated yet
+        play(self.game, ana, 0, n=2)
+        with self.assertRaises(OutOfOrder):
+            self.game.stop(ana, 1)  # not the current problem
+        self.game.stop(ana, 0)
+        state = self.game.state(ana)
+        self.assertEqual(state["current"], 1)
+        self.assertEqual(len(self.game.reveal(ana, 0)["you"]["points"]), 2)
+        with self.assertRaises(BudgetExhausted):
+            self.game.evaluate(ana, 0, [0.5, 0.5])  # a stopped problem is over
+        with self.assertRaises(BudgetExhausted):
+            self.game.stop(ana, 0)
+        self.assertEqual(self.game.board()["standings"][0]["done"], 1)
+        with self.assertRaises(NotFound):
+            self.game.stop(ana, 7)
 
     def test_cookie_from_another_contest(self):
         other = Game(self.store, replace(CFG, id="g3"))
