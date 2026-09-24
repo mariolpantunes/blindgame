@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- blindgame: a lone probe in dark space, with a crosshair. -->
+  <rect width="64" height="64" rx="13" fill="#1b1f27" />
+  <circle cx="14" cy="15" r="1.2" fill="#d8dee9" opacity="0.7" />
+  <circle cx="50" cy="11" r="0.9" fill="#d8dee9" opacity="0.5" />
+  <circle cx="53" cy="48" r="1.2" fill="#d8dee9" opacity="0.6" />
+  <circle cx="11" cy="50" r="0.9" fill="#d8dee9" opacity="0.5" />
+  <circle cx="32" cy="32" r="12" fill="none" stroke="#88c0d0" stroke-width="2" opacity="0.8" />
+  <path d="M32 14v8M32 42v8M14 32h8M42 32h8" stroke="#88c0d0" stroke-width="2.5" stroke-linecap="round" />
+  <circle cx="32" cy="32" r="4.5" fill="#ebcb8b" />
+</svg>

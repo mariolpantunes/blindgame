@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blindgame"
+version = "0.1.0"
+description = "Feel like a black-box optimizer: minimise hidden functions by hand, one query at a time."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Mário Antunes" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pyBlindOpt>=0.5.0",
+    "numpy>=2.0",
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.53",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+blindgame = "blindgame.__main__:main"
+
+[dependency-groups]
+test = ["httpx2>=2.13.1", "coverage>=7.16"]
+
+[tool.setuptools]
+packages = ["blindgame"]
+
+[tool.setuptools.package-data]
+blindgame = ["static/*.html", "static/*.css", "static/*.svg", "static/js/*.js"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# D1: every public module, class and function has a docstring (tests excepted).
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "D1"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D1"]
+
+[tool.basedpyright]
+venvPath = "."
+venv = "venv"
+typeCheckingMode = "standard"
+include = ["blindgame", "tests"]
+
+[tool.coverage.run]
+source = ["blindgame"]
+
+[tool.vulture]
+paths = ["blindgame", "tests"]
+min_confidence = 80

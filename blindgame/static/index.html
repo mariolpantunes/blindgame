@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>blindgame</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="app">
+    <header class="topbar">
+        <div class="brand"><img src="/static/favicon.svg" alt=""><h1>blindgame</h1></div>
+        <span id="contest-chip" class="chip hidden"></span>
+        <span id="practice-chip" class="chip practice hidden"></span>
+        <span class="spacer"></span>
+        <span id="player-chip" class="chip hidden"></span>
+        <button id="leave" class="ghost hidden" type="button">Leave</button>
+    </header>
+
+    <main id="join-view" class="center hidden">
+        <form id="join-form" class="card">
+            <h2 id="join-title">Be the optimizer</h2>
+            <p class="muted" id="join-intro">
+                Somewhere in a dark box hides a minimum. For each problem you get a few
+                evaluations, and each one tells you a single number. Lowest value wins.
+            </p>
+            <label id="code-label" class="hidden">Contest code
+                <input id="join-code" autocomplete="off" maxlength="32"
+                       style="text-transform: uppercase; letter-spacing: 0.1em">
+            </label>
+            <label>Nickname
+                <input id="join-nick" autocomplete="nickname" maxlength="24" required>
+            </label>
+            <button type="submit">Enter the void</button>
+            <div id="join-error" class="error" role="alert"></div>
+        </form>
+    </main>
+
+    <main id="game-view" class="game hidden">
+        <div class="stage">
+            <div class="stage-head">
+                <h2 id="stage-title" class="stage-title"></h2>
+                <div id="progress" class="progress" aria-label="Problems"></div>
+            </div>
+            <div class="space-wrap">
+                <canvas id="space" aria-label="Search space: click to aim, scroll to zoom, drag to pan"></canvas>
+                <div id="banner" class="banner hidden"></div>
+                <div id="cursor" class="overlay mono"></div>
+                <div class="overlay right">scroll: zoom · drag: pan · double-click: reset</div>
+                <div id="tooltip" class="tooltip mono hidden"></div>
+            </div>
+        </div>
+
+        <aside id="play-panel" class="panel">
+            <section>
+                <h2>Next evaluation</h2>
+                <form id="eval-form" class="coords">
+                    <label>x₁ <input id="x1" class="mono" type="number" min="0" max="1" step="any" required></label>
+                    <label>x₂ <input id="x2" class="mono" type="number" min="0" max="1" step="any" required></label>
+                    <button id="eval-btn" type="submit" style="grid-column: 1 / -1">Evaluate f(x)</button>
+                </form>
+                <div id="eval-error" class="error" role="alert"></div>
+            </section>
+            <section>
+                <h2>Budget</h2>
+                <div id="budget" class="budget" aria-live="polite"></div>
+            </section>
+            <section>
+                <h2>Best so far</h2>
+                <div id="best" class="best mono">–</div>
+            </section>
+            <section>
+                <h2>History</h2>
+                <table>
+                    <thead><tr><th>#</th><th>x₁</th><th>x₂</th><th>f(x)</th></tr></thead>
+                    <tbody id="history"></tbody>
+                </table>
+                <p class="muted" style="margin: 0">Click a row to aim at that point again.</p>
+            </section>
+        </aside>
+
+        <aside id="reveal-panel" class="panel hidden">
+            <section>
+                <h2>What was hiding</h2>
+                <div id="rv-name" class="reveal-name"></div>
+                <div id="rv-desc" class="muted"></div>
+                <div class="mono">f* = <span id="rv-fopt"></span></div>
+            </section>
+            <section>
+                <h2>You</h2>
+                <div class="mono">best <span id="rv-best" class="best-inline"></span></div>
+                <div class="mono">gap to f* <span id="rv-gap"></span></div>
+            </section>
+            <section>
+                <h2>The machines, same budget</h2>
+                <table>
+                    <thead><tr><th>Optimizer</th><th>median gap</th><th>you beat</th></tr></thead>
+                    <tbody id="rv-machines"></tbody>
+                </table>
+                <p class="muted" style="margin: 0">
+                    Squares: one run of each optimizer (click a row to hide it). Star: the optimum. Gaps are in the
+                    function's own units; "you beat" is over <span id="rv-runs"></span> runs.
+                </p>
+            </section>
+            <button id="next-btn" type="button">Next problem →</button>
+        </aside>
+    </main>
+
+    <main id="final-view" class="page hidden">
+        <section>
+            <h2 id="final-title">Your results</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Problem</th><th>Function</th><th>your gap</th><th>best machine</th><th>you beat</th></tr></thead>
+                    <tbody id="final-rows"></tbody>
+                </table>
+            </div>
+        </section>
+        <section>
+            <h2>Leaderboard</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead id="lb-head"></thead>
+                    <tbody id="lb-rows"></tbody>
+                </table>
+            </div>
+            <p class="muted">Only each player's first attempt counts. Reload the page to play again (practice).</p>
+            <button id="again-btn" type="button" style="align-self: flex-start">Play again (practice)</button>
+        </section>
+    </main>
+
+    <script type="module" src="/static/js/play.js"></script>
+</body>
+</html>

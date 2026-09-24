@@ -1,0 +1,21 @@
+# frpc on the teacher laptop: publishes a local port (the blindgame server) as
+# https://tunnel.hrun.mooo.com through frps on hrun.
+# Needs FRP_AUTH_TOKEN in the environment (from ./.env, same value as hrun ~/services/.env).
+#   set -a; . ./.env; set +a; frpc -c deploy/frpc.toml
+serverAddr = "tunnel.hrun.mooo.com"
+serverPort = 443
+
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_AUTH_TOKEN }}"
+
+# Websocket over TLS to nginx on 443: the only port eduroam is sure to allow.
+transport.protocol = "wss"
+# nginx already terminates TLS; frp's own inner TLS would be redundant.
+transport.tls.enable = false
+
+[[proxies]]
+name = "tunnel"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 8000
+customDomains = ["tunnel.hrun.mooo.com"]

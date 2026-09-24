@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>blindgame board</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand"><img src="/static/favicon.svg" alt=""><h1>blindgame</h1></div>
+        <span id="title" class="chip"></span>
+        <span class="spacer"></span>
+        <span id="status" class="chip"></span>
+    </header>
+
+    <main class="page board-page">
+        <section style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between">
+            <div>
+                <div class="muted">Play at</div>
+                <div id="join-url" class="code mono"></div>
+            </div>
+            <div id="rules" class="muted" style="max-width: 520px"></div>
+        </section>
+
+        <section>
+            <h2>Standings</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead id="head"></thead>
+                    <tbody id="rows"></tbody>
+                </table>
+            </div>
+            <p id="empty" class="muted">Nobody has joined yet.</p>
+        </section>
+
+        <div id="error" class="error" role="alert"></div>
+    </main>
+
+    <script type="module" src="/static/js/board.js"></script>
+</body>
+</html>
